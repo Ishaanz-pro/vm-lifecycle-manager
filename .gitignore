@@ -4,5 +4,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.db
+*.db-*
 *.egg-info/
-
+.env
+dist/
+qemu-state/
+agent/hostagent
+agent/hostagent.exe
+build/

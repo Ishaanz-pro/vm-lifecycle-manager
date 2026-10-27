@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # macos-latest runners are Apple Silicon
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check . && ruff format --check .
+      - run: pytest -q -rs
+
+  go:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  containers:
+    runs-on: ubuntu-latest
+    needs: [python, go]
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose up -d --build --wait
+      - run: python3 scripts/smoke.py --base-url http://127.0.0.1:8000 --api-key change-me-admin-key
+      - name: agent heartbeat reached the control plane
+        run: |
+          for i in $(seq 1 20); do
+            status=$(curl -s -H 'X-API-Key: change-me-admin-key' localhost:8000/v1/hosts \
+              | python3 -c "import sys,json; print({h['name']:h['status'] for h in json.load(sys.stdin)['items']}['agent-host'])")
+            [ "$status" = READY ] && exit 0
+            sleep 2
+          done
+          exit 1
+      - if: always()
+        run: docker compose logs --no-color | tail -200

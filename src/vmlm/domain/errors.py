@@ -16,6 +16,14 @@ class InstanceNotFound(DomainError):
     code = "instance_not_found"
 
 
+class OperationNotFound(DomainError):
+    code = "operation_not_found"
+
+
+class HostNotFound(DomainError):
+    code = "host_not_found"
+
+
 class InvalidTransition(DomainError):
     code = "invalid_transition"
 
@@ -36,9 +44,13 @@ class IdempotencyConflict(DomainError):
     code = "idempotency_conflict"
 
 
-class ProviderOperationFailed(DomainError):
-    code = "provider_operation_failed"
-
-
 class Unauthorized(DomainError):
     code = "unauthorized"
+
+
+class Forbidden(DomainError):
+    code = "forbidden"
+
+
+class FeatureDisabled(DomainError):
+    code = "feature_disabled"

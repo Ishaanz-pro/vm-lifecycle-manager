@@ -1,0 +1,47 @@
+# Offline stack. Differences from the development compose file:
+#   * pull_policy: never   -> a missing image is an error, not a silent download
+#   * no `build:`           -> nothing is built on the offline machine
+#   * internal network      -> Docker gives it no route to the outside world
+#   * no published ports    -> reachable only from containers on the same network
+# Images come from `docker load` of the bundle (install-bundle.sh).
+
+x-hardening: &hardening
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pull_policy: never
+  networks: [isolated]
+
+services:
+  api:
+    <<: *hardening
+    image: vm-lifecycle-manager:airgap
+    env_file: [.env]
+    environment:
+      VMLM_HOSTS: '[{"name":"host-1","vcpus":16,"memory_mib":65536},{"name":"agent-host","vcpus":1,"memory_mib":512,"agent_managed":true}]'
+    volumes: [vmlm-data:/data]
+
+  agent:
+    <<: *hardening
+    image: vmlm-hostagent:airgap
+    environment:
+      VMLM_AGENT_HOST_NAME: agent-host
+      VMLM_AGENT_CONTROL_PLANE_URL: http://api:8000
+      VMLM_AGENT_LISTEN: 0.0.0.0:9100
+      VMLM_AGENT_API_KEY: ${VMLM_ADMIN_API_KEY:?missing VMLM_ADMIN_API_KEY}
+    depends_on:
+      api: { condition: service_healthy }
+
+  smoke:   # used only by verify-offline.sh via `docker compose run`
+    <<: *hardening
+    image: vm-lifecycle-manager:airgap
+    profiles: [verify]
+
+networks:
+  isolated:
+    internal: true
+
+volumes:
+  vmlm-data:

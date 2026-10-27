@@ -1,6 +1,10 @@
-"""Uniform error format: {"error": {"code", "message", "details"}}."""
+"""Uniform error format: {"error": {"code", "message", "details", "request_id"}}.
 
-import logging
+Unhandled exceptions are logged with their traceback (with the request id) and returned as
+a generic 500 by the request-context middleware; stack traces and host details never reach
+the client.
+"""
+
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -10,23 +14,28 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from vmlm.domain import errors as e
-
-log = logging.getLogger("vmlm.api")
+from vmlm.observability.context import request_id_var
 
 STATUS_BY_ERROR: dict[type[e.DomainError], int] = {
     e.InstanceNotFound: 404,
+    e.OperationNotFound: 404,
+    e.HostNotFound: 404,
     e.InvalidTransition: 409,
     e.InsufficientCapacity: 409,
     e.DoubleAllocation: 409,
     e.ConcurrentModification: 409,
     e.IdempotencyConflict: 409,
-    e.ProviderOperationFailed: 502,
     e.Unauthorized: 401,
+    e.Forbidden: 403,
+    e.FeatureDisabled: 403,
 }
 
 
 def _body(code: str, message: str, details: Any = None) -> dict[str, Any]:
-    return {"error": {"code": code, "message": message, "details": details or {}}}
+    body: dict[str, Any] = {"error": {"code": code, "message": message, "details": details or {}}}
+    if (rid := request_id_var.get()) is not None:
+        body["error"]["request_id"] = rid
+    return body
 
 
 def install_error_handlers(app: FastAPI) -> None:
@@ -55,7 +64,5 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(_body("http_error", str(exc.detail)), exc.status_code)
 
-    @app.exception_handler(Exception)
-    async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
-        log.error("unhandled_exception", exc_info=exc)
-        return JSONResponse(_body("internal_error", "internal server error"), 500)
+    # Unhandled exceptions are turned into a generic 500 by RequestContextMiddleware, which
+    # still has the request id in scope; a handler registered here would run outside it.

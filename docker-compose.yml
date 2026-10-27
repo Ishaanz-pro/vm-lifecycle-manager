@@ -1,0 +1,61 @@
+# Local multi-service stack: API, a separate worker process, and the Go host agent.
+#
+#   cp .env.example .env      # set VMLM_ADMIN_API_KEY to a random value
+#   docker compose up --build
+#   curl localhost:8000/ready
+#
+# api and worker share one SQLite file on a named volume. That is safe here because both
+# containers run on the same machine and the volume is a local filesystem; it would NOT be
+# safe across hosts or on a network filesystem (docs/design-decisions.md).
+
+x-common: &common
+  build: .
+  image: vm-lifecycle-manager:local
+  init: true                     # forwards signals and reaps zombies
+  read_only: true                # root filesystem immutable; only /data and /tmp writable
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  volumes: [vmlm-data:/data]
+  env_file: [.env]
+  stop_grace_period: 15s
+  deploy:
+    resources:
+      limits: { cpus: "1.0", memory: 256M }
+
+services:
+  api:
+    <<: *common
+    environment:
+      VMLM_WORKER_ENABLED: "false"   # work runs in the dedicated worker service
+      VMLM_HOSTS: '[{"name":"host-1","vcpus":16,"memory_mib":65536},{"name":"agent-host","vcpus":1,"memory_mib":512,"agent_managed":true}]'
+    ports: ["127.0.0.1:8000:8000"]   # loopback only
+
+  worker:
+    <<: *common
+    command: ["python", "-m", "vmlm.worker_main"]
+    healthcheck: { disable: true }   # no HTTP server; liveness = process running
+    depends_on:
+      api: { condition: service_healthy }   # api creates the schema and seeds hosts
+
+  agent:
+    build: ./agent
+    image: vmlm-hostagent:local
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      VMLM_AGENT_HOST_NAME: agent-host
+      VMLM_AGENT_CONTROL_PLANE_URL: http://api:8000
+      VMLM_AGENT_LISTEN: 0.0.0.0:9100
+      VMLM_AGENT_API_KEY: ${VMLM_ADMIN_API_KEY:?set VMLM_ADMIN_API_KEY in .env}
+    ports: ["127.0.0.1:9100:9100"]
+    depends_on:
+      api: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+
+volumes:
+  vmlm-data:

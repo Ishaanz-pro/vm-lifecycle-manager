@@ -1,0 +1,53 @@
+# Host agent: one pod per node (DaemonSet), registered under the node's name.
+#
+# Behaviour on failure: if an agent pod dies or its node becomes unreachable, heartbeats
+# stop; after VMLM_HEARTBEAT_STALE_S the reconciler marks that host UNHEALTHY and the
+# scheduler stops placing new instances there. Existing reservations are kept, because the
+# VMs may still be running. When the agent comes back, the next heartbeat marks it READY.
+#
+# Measurement caveat: inside a container, runtime.NumCPU() and /proc/meminfo report the
+# node's resources (not the pod's limits), which is what a host agent should report.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vmlm-hostagent
+  namespace: vmlm
+  labels: { app.kubernetes.io/name: vmlm-hostagent }
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: vmlm-hostagent }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: vmlm-hostagent }
+    spec:
+      terminationGracePeriodSeconds: 10
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: agent
+          image: vmlm-hostagent:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 9100 }]
+          env:
+            - name: VMLM_AGENT_HOST_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - { name: VMLM_AGENT_CONTROL_PLANE_URL, value: "http://vmlm-api.vmlm.svc:8000" }
+            - { name: VMLM_AGENT_LISTEN, value: "0.0.0.0:9100" }
+            - { name: VMLM_AGENT_INTERVAL, value: "10s" }
+            - name: VMLM_AGENT_API_KEY
+              valueFrom: { secretKeyRef: { name: vmlm-secrets, key: admin-api-key } }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:   # ready only once a heartbeat has been accepted recently
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
