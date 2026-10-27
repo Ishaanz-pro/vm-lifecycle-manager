@@ -1,5 +1,8 @@
 # VM Lifecycle Manager
 
+[![CI](https://github.com/Ishaanz-pro/vm-lifecycle-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Ishaanz-pro/vm-lifecycle-manager/actions/workflows/ci.yml)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+
 A mini cloud-infrastructure **control plane**: a REST API that accepts VM lifecycle requests,
 schedules them onto hosts with capacity accounting, executes them asynchronously through a
 durable, lease-based operation queue, and continuously reconciles what it *recorded* with
@@ -218,6 +221,16 @@ Images run as non-root with a read-only root filesystem, all capabilities droppe
 `no-new-privileges`, resource limits, health checks, and secrets only via environment.
 Multi-arch base images build natively on M1.
 
+### Demo deployment on Render (optional)
+
+`render.yaml` is a Render Blueprint that runs the `Dockerfile` as a web service with the
+**simulated** provider (no real VMs). In Render: New → Blueprint → select this repository.
+Render generates `VMLM_API_KEY` and `VMLM_ADMIN_API_KEY` (visible only in its dashboard);
+send one as `X-API-Key`, and browse `/docs` for the interactive API. Failure injection stays
+off. Free-tier caveats: the service sleeps when idle and its database resets on restart.
+There is no rate limiting, so treat a public instance as a demo only. The blueprint has not
+been deployed by the author; no live URL is claimed here.
+
 ## Go host agent
 
 ```bash
@@ -333,8 +346,9 @@ signing. When keys are unset, the API is open: that is a local-development defau
 | Go tests with race detector, cross-compile to darwin/arm64 | **run** |
 | Control plane + Go agent as two live processes | **run**: agent reported 7 vCPU / 15112 MiB (8 CPUs, 1 reserved); placement used it; host went UNHEALTHY after the agent was killed |
 | Load test, smoke test, demo script | **run** against live servers |
-| macOS (Apple Silicon) | **not run by the author**; CI workflow includes `macos-latest` (Apple Silicon runners) |
-| Dockerfiles, Compose | **not built** (no Docker on the dev machine); CI builds and smoke-tests them |
+| Python tests + lint on Linux and macOS (Apple Silicon runner), Python 3.11 and 3.13 | **run in CI** (GitHub Actions, green); not run by the author on a Mac |
+| Go tests with race detector on Linux and macOS | **run in CI** (Go 1.24, green) |
+| Dockerfiles, Compose | **run in CI**: images build, the Compose stack starts, `scripts/smoke.py` passes and the Go agent's heartbeat reaches the control plane. Not run by the author locally (no Docker on the dev machine) |
 | Kubernetes manifests | **not applied** to any cluster |
 | Air-gap bundle end to end | **not run**; scripts syntax-checked, smoke test's egress check verified |
 | QEMU real boot | **not run**; opt-in test `VMLM_QEMU_E2E=1` |
