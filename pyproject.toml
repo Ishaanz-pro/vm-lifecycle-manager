@@ -21,6 +21,9 @@ dev = ["pytest>=8,<9", "httpx>=0.27,<1", "ruff>=0.6"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+vmlm = ["web/*"]
+
 [project.scripts]
 vmlm-worker = "vmlm.worker_main:main"
 

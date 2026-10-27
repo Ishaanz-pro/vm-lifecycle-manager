@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Lifecycle Manager</title>
+  <meta name="description" content="Live dashboard for a VM lifecycle control plane over a simulated provider.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div>
+        <h1>VM Lifecycle Manager</h1>
+        <p class="sub">A control plane: scheduler, durable operation queue, reconciler.</p>
+      </div>
+      <nav class="links" aria-label="Project links">
+        <span id="conn" class="conn" role="status" aria-live="polite"><i></i><span>connecting…</span></span>
+        <a href="/docs">API docs</a>
+        <a href="/metrics">Metrics</a>
+        <a href="https://github.com/Ishaanz-pro/vm-lifecycle-manager">Source</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="notice" aria-label="About this demo">
+      <strong>Simulated provider: no real virtual machines are created.</strong>
+      Everything else is the real control plane. Create a VM, then stop, start or terminate it
+      and watch the operation move through the queue and the audit trail fill in. Try the
+      oversized preset to see a capacity rejection, and replay a create to see idempotency.
+    </section>
+
+    <section id="key-card" class="card" hidden>
+      <h2>API key required</h2>
+      <p class="muted">This server has authentication enabled. The key stays in this tab only.</p>
+      <form id="key-form" class="row">
+        <label class="sr-only" for="key-input">API key</label>
+        <input id="key-input" type="password" autocomplete="off" required placeholder="X-API-Key">
+        <button class="btn primary" type="submit">Use key</button>
+      </form>
+    </section>
+
+    <div class="grid">
+      <div class="col">
+        <section class="card" aria-labelledby="hosts-h">
+          <h2 id="hosts-h">Hosts and capacity</h2>
+          <div id="hosts" class="hosts"><p class="muted">Loading…</p></div>
+        </section>
+
+        <section class="card" aria-labelledby="create-h">
+          <h2 id="create-h">Create a VM</h2>
+          <form id="create-form" autocomplete="off">
+            <div class="presets" id="presets" role="group" aria-label="Size presets">
+              <button type="button" class="chip" data-v="1" data-m="1024">Small<small>1 vCPU · 1 GiB</small></button>
+              <button type="button" class="chip" data-v="2" data-m="4096">Medium<small>2 vCPU · 4 GiB</small></button>
+              <button type="button" class="chip" data-v="4" data-m="8192">Large<small>4 vCPU · 8 GiB</small></button>
+              <button type="button" class="chip warn" data-v="64" data-m="131072">Oversized<small>64 vCPU · 128 GiB</small></button>
+            </div>
+            <div class="fields">
+              <label>Name<input id="f-name" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\-]*"></label>
+              <label>vCPUs<input id="f-vcpus" type="number" min="1" max="1024" required value="2"></label>
+              <label>Memory (MiB)<input id="f-mem" type="number" min="1" required value="4096"></label>
+            </div>
+            <div class="row">
+              <button class="btn primary" type="submit">Create VM</button>
+              <button class="btn" type="button" id="replay" disabled
+                      title="Send the previous create again with the same Idempotency-Key">Replay last create</button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <div class="col wide">
+        <section class="card" aria-labelledby="inst-h">
+          <div class="card-head">
+            <h2 id="inst-h">Instances</h2>
+            <label class="check"><input type="checkbox" id="show-terminated"> show terminated</label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Name</th><th>State</th><th>Host</th><th>Size</th><th>Age</th><th><span class="sr-only">Actions</span></th></tr>
+              </thead>
+              <tbody id="instances"></tbody>
+            </table>
+          </div>
+          <p id="instances-empty" class="muted empty" hidden>No instances yet. Create one on the left.</p>
+        </section>
+
+        <section class="card" aria-labelledby="detail-h">
+          <h2 id="detail-h">Operations and audit trail</h2>
+          <div id="detail"><p class="muted">Select an instance to see its operations and events.</p></div>
+        </section>
+
+        <section class="card" aria-labelledby="log-h">
+          <h2 id="log-h">API calls this page made</h2>
+          <ol id="api-log" class="log" aria-live="off"></ol>
+        </section>
+      </div>
+    </div>
+
+    <section class="card how" aria-labelledby="how-h">
+      <h2 id="how-h">What happens when you click</h2>
+      <ol>
+        <li>The API validates the request, <b>reserves capacity</b> on the best-fit host and records a queued operation, all in <b>one database transaction</b>, then answers <code>202 Accepted</code>.</li>
+        <li>A worker <b>claims the operation under a lease</b> and calls the provider with a deadline. Failures are retried with exponential backoff and jitter; a crashed worker's lease expires and the work is re-queued.</li>
+        <li>The result is committed with a version check, so a stale outcome can never overwrite newer state, and every step is written to the audit trail.</li>
+        <li>A reconciler compares recorded state with what the provider reports and repairs or flags drift.</li>
+      </ol>
+    </section>
+  </main>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

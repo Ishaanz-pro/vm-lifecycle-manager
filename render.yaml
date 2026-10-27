@@ -1,4 +1,5 @@
 # Render Blueprint for a public demo of the control plane (simulated provider, no real VMs).
+# The dashboard is at /ui/ (the root URL redirects there); the REST docs are at /docs.
 # Create it from the dashboard: New > Blueprint > pick this repository.
 #
 # Free-tier notes: the service sleeps when idle (first request after a pause is slow) and its
@@ -23,5 +24,15 @@ services:
         generateValue: true
       - key: VMLM_FAILURE_INJECTION_ENABLED
         value: "false"
+      # Demo mode: the dashboard at /ui receives the *user-tier* key from /ui/config, so
+      # visitors can click around without being given a key. The admin key is never exposed.
+      - key: VMLM_DEMO_MODE
+        value: "true"
+      # Slow the simulated provider slightly so PROVISIONING / STOPPING are visible.
+      - key: VMLM_SIMULATED_LATENCY_S
+        value: "1.2"
+      # Three small hosts so capacity, best-fit placement and rejections are easy to see.
+      - key: VMLM_HOSTS
+        value: '[{"name":"host-a","vcpus":8,"memory_mib":16384},{"name":"host-b","vcpus":8,"memory_mib":16384},{"name":"host-c","vcpus":4,"memory_mib":8192}]'
       - key: VMLM_LOG_LEVEL
         value: INFO

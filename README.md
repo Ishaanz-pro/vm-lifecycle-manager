@@ -3,7 +3,7 @@
 [![CI](https://github.com/Ishaanz-pro/vm-lifecycle-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Ishaanz-pro/vm-lifecycle-manager/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-**Live demo (simulated provider, no real VMs):** [vm-lifecycle-manager.onrender.com](https://vm-lifecycle-manager.onrender.com/docs) — interactive API docs; `/health` and `/ready` are open, data endpoints need an API key. Free tier: the first request after idle can take about a minute.
+**Live demo (simulated provider, no real VMs):** [vm-lifecycle-manager.onrender.com](https://vm-lifecycle-manager.onrender.com) opens an interactive dashboard: create VMs, stop/start/terminate them, and watch each operation move through the queue and the audit trail. REST docs are at [/docs](https://vm-lifecycle-manager.onrender.com/docs). Free tier: the first request after idle can take about a minute, and the demo database resets on restart.
 
 A mini cloud-infrastructure **control plane**: a REST API that accepts VM lifecycle requests,
 schedules them onto hosts with capacity accounting, executes them asynchronously through a
@@ -21,8 +21,9 @@ into it.
 |---|---|
 | Control plane | Python 3.11+ · FastAPI · Pydantic v2 · SQLAlchemy 2 · SQLite (WAL) |
 | Host agent | Go 1.22+, standard library only |
+| Dashboard | Built-in browser UI at `/ui/` (no framework, no build step, CSP) |
 | Packaging | Docker (non-root, read-only rootfs), Compose, Kubernetes manifests, air-gap bundle |
-| Tests | 203 Python tests (deterministic: injected clock, no sleeps) · Go unit tests with `-race` |
+| Tests | 218 Python tests (deterministic: injected clock, no sleeps) · Go unit tests with `-race` |
 
 ## Contents
 
@@ -223,15 +224,28 @@ Images run as non-root with a read-only root filesystem, all capabilities droppe
 `no-new-privileges`, resource limits, health checks, and secrets only via environment.
 Multi-arch base images build natively on M1.
 
-### Demo deployment on Render (optional)
+### Dashboard and demo deployment on Render (optional)
 
-`render.yaml` is a Render Blueprint that runs the `Dockerfile` as a web service with the
-**simulated** provider (no real VMs). In Render: New → Blueprint → select this repository.
-Render generates `VMLM_API_KEY` and `VMLM_ADMIN_API_KEY` (visible only in its dashboard);
-send one as `X-API-Key`, and browse `/docs` for the interactive API. Failure injection stays
-off. Free-tier caveats: the service sleeps when idle and its database resets on restart.
-There is no rate limiting, so treat a public instance as a demo only. The blueprint was deployed by the author and `/health`, `/ready` and `/docs` respond;
-the write path on the hosted instance has not been exercised.
+The control plane serves a small dependency-free dashboard at `/ui/` (plain HTML/CSS/JS, no
+build step, no third-party requests, strict Content-Security-Policy). It uses only the public
+REST API: host capacity, create with an `Idempotency-Key`, start/stop/terminate, a per-instance
+operation and audit-event view, and a log of the API calls the page itself made. Presets
+include an oversized request (to see a `409` capacity rejection) and a "replay last create"
+button (to see an idempotent replay return `200` with the same operation).
+
+`render.yaml` is a Render Blueprint that runs the `Dockerfile` with the **simulated** provider
+(no real VMs) in `VMLM_DEMO_MODE`: `/ui/config` then hands the page the **user-tier** API key
+so a visitor can try it without being given one. The admin key is never exposed, failure
+injection must be off, and the settings validator refuses demo mode otherwise. In Render:
+New → Blueprint → select this repository; Render generates both keys (visible only in its
+dashboard).
+
+Limits to know: anyone who opens the page can create and terminate VMs on the demo, capacity
+is finite (3 small hosts) so abuse is bounded, but there is **no rate limiting**. The free tier
+sleeps when idle and its database resets on restart. Treat a public instance as a demo only.
+The page's JavaScript has been syntax-checked and the exact API flow it performs is covered by
+`tests/test_ui.py` and was exercised against a live local server; it has not been tested
+across browsers.
 
 ## Go host agent
 
@@ -344,12 +358,13 @@ signing. When keys are unset, the API is open: that is a local-development defau
 
 | Item | Status |
 |---|---|
-| Python tests, lint | **run**: 200 passed / 3 skipped on Windows 11 |
+| Python tests, lint | **run**: 215 passed / 3 skipped on Windows 11 |
 | Go tests with race detector, cross-compile to darwin/arm64 | **run** |
 | Control plane + Go agent as two live processes | **run**: agent reported 7 vCPU / 15112 MiB (8 CPUs, 1 reserved); placement used it; host went UNHEALTHY after the agent was killed |
 | Load test, smoke test, demo script | **run** against live servers |
 | Python tests + lint on Linux and macOS (Apple Silicon runner), Python 3.11 and 3.13 | **run in CI** (GitHub Actions, green); not run by the author on a Mac |
 | Go tests with race detector on Linux and macOS | **run in CI** (Go 1.24, green) |
+| Dashboard (`/ui/`) | API flow covered by `tests/test_ui.py`; JS syntax-checked and flow exercised against a live local server. **Not tested in a real browser or across browsers** |
 | Dockerfiles, Compose | **run in CI**: images build, the Compose stack starts, `scripts/smoke.py` passes and the Go agent's heartbeat reaches the control plane. Not run by the author locally (no Docker on the dev machine) |
 | Kubernetes manifests | **not applied** to any cluster |
 | Air-gap bundle end to end | **not run**; scripts syntax-checked, smoke test's egress check verified |

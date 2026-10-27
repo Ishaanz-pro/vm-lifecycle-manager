@@ -7,7 +7,11 @@ from vmlm.providers.simulated import SimulatedProvider
 
 def build_provider(settings: Settings) -> VMProvider:
     if settings.provider == "simulated":
-        return SimulatedProvider()
+        provider = SimulatedProvider()
+        if settings.simulated_latency_s > 0:
+            for operation in ("provision", "start", "stop", "delete"):
+                provider.set_latency(operation, settings.simulated_latency_s)
+        return provider
     if settings.provider == "qemu":
         from vmlm.providers.qemu import QemuProvider  # imported lazily: optional dependency
 

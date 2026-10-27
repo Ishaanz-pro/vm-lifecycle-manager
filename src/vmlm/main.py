@@ -22,6 +22,7 @@ from fastapi import FastAPI
 from vmlm.api.errors import install_error_handlers
 from vmlm.api.middleware import RequestContextMiddleware
 from vmlm.api.routers import admin, debug, public, router
+from vmlm.api.ui import install_ui
 from vmlm.config import Settings
 from vmlm.db.models import utcnow
 from vmlm.db.session import init_db, make_engine, make_session_factory
@@ -148,4 +149,5 @@ def create_app(
     app.include_router(admin)
     app.include_router(debug)
     app.include_router(public)
+    install_ui(app)
     return app

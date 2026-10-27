@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # Development-only controls. Never enable in a shared deployment.
     failure_injection_enabled: bool = False
 
+    # Public-demo mode. The dashboard at /ui fetches the *user-tier* key from /ui/config so a
+    # visitor can try the API without being handed a key. The admin key is never exposed.
+    demo_mode: bool = False
+    # Artificial per-call delay of the simulated provider so transitions are visible in the UI.
+    simulated_latency_s: float = Field(default=0.0, ge=0, le=5)
+
     # QEMU provider (only read when provider == "qemu")
     qemu_binary: str = "qemu-system-aarch64"
     qemu_img_binary: str = "qemu-img"
@@ -84,4 +90,14 @@ class Settings(BaseSettings):
             and self.api_key.get_secret_value() == self.admin_api_key.get_secret_value()
         ):
             raise ValueError("api_key and admin_api_key must differ")
+        if self.simulated_latency_s >= self.provider_timeout_s:
+            raise ValueError("simulated_latency_s must be below provider_timeout_s")
+        if self.demo_mode:
+            # Demo mode hands the user key to every visitor, so everything else must be locked.
+            if not (self.api_key and self.admin_api_key):
+                raise ValueError("demo_mode requires both api_key and admin_api_key")
+            if self.failure_injection_enabled:
+                raise ValueError("demo_mode must not be combined with failure injection")
+            if self.provider != "simulated":
+                raise ValueError("demo_mode is only allowed with the simulated provider")
         return self
