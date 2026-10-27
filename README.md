@@ -3,6 +3,8 @@
 [![CI](https://github.com/Ishaanz-pro/vm-lifecycle-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Ishaanz-pro/vm-lifecycle-manager/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
+**Live demo (simulated provider, no real VMs):** [vm-lifecycle-manager.onrender.com](https://vm-lifecycle-manager.onrender.com/docs) — interactive API docs; `/health` and `/ready` are open, data endpoints need an API key. Free tier: the first request after idle can take about a minute.
+
 A mini cloud-infrastructure **control plane**: a REST API that accepts VM lifecycle requests,
 schedules them onto hosts with capacity accounting, executes them asynchronously through a
 durable, lease-based operation queue, and continuously reconciles what it *recorded* with
@@ -228,8 +230,8 @@ Multi-arch base images build natively on M1.
 Render generates `VMLM_API_KEY` and `VMLM_ADMIN_API_KEY` (visible only in its dashboard);
 send one as `X-API-Key`, and browse `/docs` for the interactive API. Failure injection stays
 off. Free-tier caveats: the service sleeps when idle and its database resets on restart.
-There is no rate limiting, so treat a public instance as a demo only. The blueprint has not
-been deployed by the author; no live URL is claimed here.
+There is no rate limiting, so treat a public instance as a demo only. The blueprint was deployed by the author and `/health`, `/ready` and `/docs` respond;
+the write path on the hosted instance has not been exercised.
 
 ## Go host agent
 
